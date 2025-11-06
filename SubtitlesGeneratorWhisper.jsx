@@ -990,6 +990,7 @@ if (typeof JSON !== "object") {
       var outputFilePath = audioOutputFolder.fsName + "/" + outputFileName;
       var outputFile = new File(outputFilePath);
 
+      // Add composition to render queue
       var rqItem = proj.renderQueue.items.add(comp);
       if (!rqItem) {
         alert("Failed to add composition to the render queue.");
@@ -997,49 +998,82 @@ if (typeof JSON !== "object") {
         return;
       }
 
-      var om = rqItem.outputModule(1);
-      if (!om) {
-        alert("Failed to access output module.");
-        if (rqItem.status !== RQItemStatus.USER_WATCHED && rqItem.status !== RQItemStatus.RENDERING && rqItem.status !== RQItemStatus.DONE) {
-          try { rqItem.remove(); } catch (e) {}
-        }
+      // Get output module with null check
+      var om = null;
+      try {
+        om = rqItem.outputModule(1);
+      } catch (e) {
+        alert("Failed to access output module: " + e.toString());
         app.endUndoGroup();
         return;
       }
 
-      var audioTemplateFound = false;
-      var templates = om.templates;
-      var audioTemplates = ["WAV Audio Only", "Wave", "WAV", "MP3 Audio Only", "MP3"];
+      if (!om) {
+        alert("Output module is null. Cannot configure render settings.");
+        app.endUndoGroup();
+        return;
+      }
 
-      for (var i = 0; i < audioTemplates.length; i++) {
-        if (indexOfArray(templates, audioTemplates[i]) !== -1) {
-          try {
-            om.applyTemplate(audioTemplates[i]);
-            audioTemplateFound = true;
-            om.file = outputFile;
-            break;
-          } catch (e) {}
+      // Set output file
+      try {
+        om.file = outputFile;
+      } catch (e) {
+        alert("Failed to set output file: " + e.toString());
+        app.endUndoGroup();
+        return;
+      }
+
+      // Try to apply WAV audio template, but don't force it
+      var audioTemplateFound = false;
+      try {
+        var templates = om.templates;
+        if (templates && templates.length > 0) {
+          var audioTemplates = ["WAV Audio Only", "Wave", "WAV", "MP3 Audio Only", "MP3", "Audio Only"];
+          
+          for (var i = 0; i < audioTemplates.length; i++) {
+            if (indexOfArray(templates, audioTemplates[i]) !== -1) {
+              try {
+                om.applyTemplate(audioTemplates[i]);
+                audioTemplateFound = true;
+                break;
+              } catch (e) {
+                // Silently continue to next template
+              }
+            }
+          }
         }
+      } catch (e) {
+        // Templates might not be accessible, continue without them
       }
 
       if (!audioTemplateFound) {
-        try {
-          om.applyTemplate("WAV Audio Only");
-          om.file = outputFile;
-        } catch (e_wav_template) {
-          om.file = outputFile;
-        }
+        alert(
+          "Audio template not found automatically.\n\n" +
+          "The composition has been added to the render queue with output path:\n" +
+          outputFilePath + "\n\n" +
+          "Please manually:\n" +
+          "1. Open Render Queue and select the composition\n" +
+          "2. Click on 'Output Module' to open settings\n" +
+          "3. Select 'WAV' or 'Audio Only' format\n" +
+          "4. Disable video output if needed\n" +
+          "5. Click Render when ready"
+        );
+      } else {
+        alert(
+          "Audio render setup complete!\n\n" +
+          "Output path: " + outputFilePath + "\n\n" +
+          "The composition has been added to the render queue.\n" +
+          "Please review settings in the Render Queue and click Render when ready."
+        );
       }
 
       app.endUndoGroup();
-      try {
-        proj.renderQueue.render();
-      } catch (e_render) {
-        alert("Error during audio rendering: " + e_render.toString());
-      }
+      
     } catch (e_render_main) {
-      alert("A critical error occurred in renderActiveCompAudio: \n" + e_render_main.toString());
-      app.endUndoGroup();
+      alert("A critical error occurred in renderActiveCompAudio: \n" + e_render_main.toString() + "\nLine: " + e_render_main.line);
+      try {
+        app.endUndoGroup();
+      } catch (e) {}
     }
   };
 
@@ -1296,7 +1330,7 @@ if (typeof JSON !== "object") {
 
   // --- Function to check for script updates ---
   var checkForUpdates = function () {
-    if (GITHUB_RAW_URL.indexOf("YOUR_USERNAME") > -1) {
+    if (!GITHUB_RAW_URL || GITHUB_RAW_URL.indexOf("YOUR_USERNAME") > -1) {
       return;
     }
 
