@@ -762,12 +762,20 @@ if (typeof JSON !== "object") {
           // PHRASE-LEVEL PROCESSING (segment timestamps only)
           for (var i = 0; i < transcriptionData.segments.length; i++) {
             var segment = transcriptionData.segments[i];
+
+            var segmentText = "";
+            if (segment && typeof segment.text !== "undefined" && segment.text !== null) {
+              segmentText = String(segment.text);
+            }
             
-            if (!segment.text || segment.text === "") {
+            if (segmentText && typeof segmentText.trim === "function") {
+              segmentText = segmentText.trim();
+            }
+
+            if (!segmentText || segmentText === "") {
               continue;
             }
 
-            var segmentText = segment.text.trim();
             var segmentStartTime = parseFloat(segment.start);
             var segmentEndTime = parseFloat(segment.end);
 
